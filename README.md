@@ -7,7 +7,7 @@ Cleans a supplier price list (CSV or XLSX) before you import it into a shop: pri
 - **Prices:** `1 250,00 грн`, `1.234,56`, `$ 300`, `12,5` become `1250.00`, `1234.56`, `300.00`, `12.50`. Rows with an unreadable or negative price are reported and **not exported**.
 - **Sizes:** `40 х 30 см` (Cyrillic х), `26×30x16,5` become `40x30`, `26x30x16.5`. A size that is not in AxB form (for example `M`) is kept as written and reported as a warning.
 - **Duplicates:** same SKU (the later row is dropped and reported); same name and size, ignoring case, punctuation and word order (reported as a warning, both rows stay).
-- **Problems reported:** empty name, no SKU, price 0, bad price, bad size. Row numbers match the original file (header is row 1).
+- **Problems reported:** empty name, no SKU, price 0, bad price, bad size. Row numbers match the original file (header is row 1; in XLSX blank rows are counted, as Excel shows them).
 - Writes three files: `clean.csv`, `report.md` (counts and a table) and `issues.json`. Exit code 1 if there is at least one error.
 
 ## Use

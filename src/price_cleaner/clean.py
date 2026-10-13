@@ -20,7 +20,8 @@ def clean_rows(rows, colmap=None):
         issues.append({"row": i, "level": level, "code": code, "message": msg})
 
     seen_sku, seen_name = {}, {}
-    for i, r in enumerate(rows, start=2):  # row 1 is the header
+    for pos, r in enumerate(rows, start=2):  # row 1 is the header
+        i = r.get("__row__") or pos
         sku = clean_text(r.get(cm["sku"]))
         name = clean_text(r.get(cm["name"]))
         price, perr = parse_price(r.get(cm["price"]))

@@ -5,6 +5,8 @@ import re
 import zipfile
 import xml.etree.ElementTree as ET
 
+ROW_KEY = "__row__"
+MAX_UNPACKED = 200 * 1024 * 1024
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 
@@ -25,7 +27,13 @@ def read_csv(path):
         dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
     except csv.Error:
         dialect = csv.excel
-    return [dict(r) for r in csv.DictReader(io.StringIO(text), dialect=dialect)]
+    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+    out = []
+    for r in reader:
+        d = dict(r)
+        d[ROW_KEY] = reader.line_num  # last physical line of the record (matches the file even with multi-line cells)
+        out.append(d)
+    return out
 
 
 def _col_index(ref):
@@ -39,6 +47,8 @@ def _col_index(ref):
 def read_xlsx(path, sheet=1):
     """First sheet by default. Values come back as strings (formulas: cached value)."""
     with zipfile.ZipFile(path) as z:
+        if sum(i.file_size for i in z.infolist()) > MAX_UNPACKED:
+            raise ValueError("xlsx unpacks to more than 200 MB; refusing")
         shared = []
         if "xl/sharedStrings.xml" in z.namelist():
             root = ET.fromstring(z.read("xl/sharedStrings.xml"))
@@ -65,14 +75,16 @@ def read_xlsx(path, sheet=1):
             cells[_col_index(c.get("r"))] = val
         if cells:
             width = max(cells) + 1
-            rows.append([cells.get(i, "") for i in range(width)])
+            rows.append((int(row.get("r") or len(rows) + 1), [cells.get(i, "") for i in range(width)]))
     if not rows:
         return []
-    header = [h.strip() for h in rows[0]]
+    header = [h.strip() for h in rows[0][1]]
     out = []
-    for r in rows[1:]:
+    for rownum, r in rows[1:]:
         r = r + [""] * (len(header) - len(r))
-        out.append(dict(zip(header, r)))
+        d = dict(zip(header, r))
+        d[ROW_KEY] = rownum  # the row number as Excel shows it, blank rows included
+        out.append(d)
     return out
 
 

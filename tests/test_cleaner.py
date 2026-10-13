@@ -95,7 +95,7 @@ class ReaderTests(unittest.TestCase):
             p = os.path.join(d, "a.xlsx")
             make_xlsx(p, [["sku", "name", "price"], ["A1", "Лежак", 99.5], ["A2", "Миска", 10]])
             rows = read_xlsx(p)
-            self.assertEqual(rows[0], {"sku": "A1", "name": "Лежак", "price": "99.5"})
+            self.assertEqual({k: v for k, v in rows[0].items() if k != "__row__"}, {"sku": "A1", "name": "Лежак", "price": "99.5"})
             self.assertEqual(len(read_table(p)), 2)
 
     def test_cp1251_csv(self):
@@ -108,6 +108,29 @@ class ReaderTests(unittest.TestCase):
     def test_unsupported_extension(self):
         with self.assertRaises(ValueError):
             read_table("x.pdf")
+
+
+class RowNumberTests(unittest.TestCase):
+    def test_xlsx_blank_rows_keep_excel_numbers(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "a.xlsx")
+            ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+            sheet = ('<worksheet %s><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>name</t></is></c><c r="B1" t="inlineStr"><is><t>price</t></is></c></row>'
+                     '<row r="2"><c r="A2" t="inlineStr"><is><t>ok</t></is></c><c r="B2"><v>5</v></c></row>'
+                     '<row r="5"><c r="A5" t="inlineStr"><is><t>bad</t></is></c><c r="B5" t="inlineStr"><is><t>n/a</t></is></c></row>'
+                     '</sheetData></worksheet>') % ns
+            with zipfile.ZipFile(p, "w") as z:
+                z.writestr("xl/worksheets/sheet1.xml", sheet)
+            _, issues = clean_rows(read_xlsx(p))
+            self.assertEqual([(x["code"], x["row"]) for x in issues if x["code"] == "bad_price"], [("bad_price", 5)])
+
+    def test_csv_multiline_cell_keeps_file_line_numbers(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "a.csv")
+            with open(p, "w", encoding="utf-8") as f:
+                f.write('name,price\n"two\nlines",5\nbad,abc\n')
+            _, issues = clean_rows(read_csv(p))
+            self.assertEqual([x["row"] for x in issues if x["code"] == "bad_price"], [4])  # the record ends on physical line 4
 
 
 class CliTests(unittest.TestCase):
